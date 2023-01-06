@@ -6,6 +6,8 @@ class ZCL_COUNT_WORDS_GIT definition
 public section.
 
   types:
+    TT_CHAR TYPE STANDARD TABLE OF c .
+  types:
     BEGIN OF ty_map,
    word TYPE string,
    count TYPE i,
@@ -16,13 +18,20 @@ public section.
   class-methods COUNT
     importing
       !IV_SENTENCE type STRING
-    returning
-      value(RT_MAP) type MT_MAP .
+    exporting
+      value(ET_MAP) type MT_MAP
+      !EV_TOT_COUNT type I .
   class-methods PROCESS
     importing
       !IV_SENTENCE type STRING
     returning
       value(RV_SENTENCE) type STRING .
+  class-methods COUNT_CHAR
+    importing
+      !IV_WORD type STRING
+    changing
+      value(CT_MAP) type MT_MAP .
+private section.
 ENDCLASS.
 
 
@@ -30,30 +39,29 @@ ENDCLASS.
 CLASS ZCL_COUNT_WORDS_GIT IMPLEMENTATION.
 
 
-  method COUNT.
-  DATA: ls_map TYPE ty_map,
-          lt_unique_words TYPE STANDARD TABLE OF string with key table_line,
-          lt_words TYPE STANDARD TABLE OF string.
-   process(
-            EXPORTING
-                iv_sentence = iv_sentence
-            RECEIVING
-                rv_sentence = data(lv_sentence)
+  METHOD count.
+    DATA: ls_map          TYPE ty_map,
+          lt_unique_words TYPE STANDARD TABLE OF string WITH KEY table_line,
+          lt_words        TYPE STANDARD TABLE OF string.
+    process(
+      EXPORTING
+        iv_sentence = iv_sentence
+      RECEIVING
+        rv_sentence = DATA(lv_sentence)
     ).
     "Add solution here
-    SPLIT lv_sentence at ' ' INTO TABLE lt_words.
-    sort lt_words.
-    lt_unique_words = lt_words.
-    delete adjacent duplicates from lt_unique_words.
-    delete lt_unique_words where table_line = ' '.
-    LOOP AT lt_unique_words into DATA(ls_word).
-        data(lt_l) = lt_words.
-        DELETE lt_l WHERE TABLE_LINE ne ls_word.
-        ls_map-count = lines( lt_l ).
-        ls_map-word = ls_word.
-        append ls_map to rt_map.
+    SPLIT lv_sentence AT ' ' INTO TABLE lt_words.
+    ev_tot_count = lines( lt_words ).
+    LOOP AT lt_words ASSIGNING FIELD-SYMBOL(<ls_word>).
+      count_char(
+        EXPORTING
+          iv_word = <ls_word>
+        changing
+          ct_map  = et_map
+      ).
+
     ENDLOOP.
-  endmethod.
+  ENDMETHOD.
 
 
   method PROCESS.
@@ -72,4 +80,29 @@ CLASS ZCL_COUNT_WORDS_GIT IMPLEMENTATION.
     REPLACE ALL OCCURRENCES OF ',' IN rv_sentence WITH ' '.
     CONDENSE rv_sentence.
   endmethod.
+
+
+  METHOD count_char.
+    DATA:
+      v             TYPE c,
+      n             TYPE i,
+      unique_string TYPE string value '',
+      ls_map TYPE ty_map.
+    DATA(lv_word) = iv_word.
+    REPLACE ALL OCCURRENCES OF REGEX '(\d)' IN lv_word WITH ''.
+    DATA(cnt) = STRLEN( lv_word ).
+    DO cnt TIMES.
+      MOVE lv_word+n(1) TO v.
+      n = n + 1.
+      FIND ALL OCCURRENCES OF v IN unique_string MATCH COUNT DATA(count).
+      IF count < 1.
+        CONCATENATE v unique_string INTO unique_string.
+      ENDIF.
+    ENDDO.
+    data(charcount) = STRLEN( unique_string ).
+    ls_map-word = iv_word .
+    ls_map-count = charcount .
+    COLLECT ls_map INTO ct_map.
+
+  ENDMETHOD.
 ENDCLASS.
